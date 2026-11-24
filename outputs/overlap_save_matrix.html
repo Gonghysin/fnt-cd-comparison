@@ -1,0 +1,340 @@
+<title>Overlap-Save 矩阵演示</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* 布局：顶部步骤条 → 当前步骤的说明与矩阵 → 底部信号视图（窗口与重叠） */
+  :root {
+    --bg: #fafaf8; --panel: #ffffff; --fg: #1c2230; --muted: #667086; --line: #d8dce4; --code: #eef0f4;
+    --b0: #2563eb; --b1: #c2650a; --b2: #0a8a63; --b3: #8e3fd1;
+    --wrap: #d42a2a; --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --panel: #1a1e27; --fg: #e6e9f0; --muted: #98a0b3; --line: #2a303c; --code: #222835;
+      --b0: #62a8ff; --b1: #f4b43c; --b2: #3dd6a0; --b3: #c590ff; --wrap: #ff7b7b; --accent: #7aa2ff;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151b; --panel: #1a1e27; --fg: #e6e9f0; --muted: #98a0b3; --line: #2a303c; --code: #222835;
+    --b0: #62a8ff; --b1: #f4b43c; --b2: #3dd6a0; --b3: #c590ff; --wrap: #ff7b7b; --accent: #7aa2ff;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: Inter, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.65;
+    padding-block: 20px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrapper { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .mono, code, pre, table.mx, .sc, .sp, .seg { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+
+  /* 步骤条 */
+  .stepbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1 1 320px; min-width: 0; }
+  .chip, .nav {
+    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+    border-radius: 8px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .chip[aria-current="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .chip:focus-visible, .nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nav:disabled { opacity: .4; cursor: default; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+  .panel h2 { font-size: 17px; margin: 0 0 8px; text-wrap: balance; }
+  pre.code {
+    margin: 0 0 10px; padding: 9px 12px; background: var(--code); border-radius: 8px;
+    font-size: 13px; overflow-x: auto; white-space: pre;
+  }
+  .txt p { margin: 0 0 8px; max-width: 78ch; }
+  .txt p:last-child { margin-bottom: 0; }
+
+  /* 矩阵 */
+  .mxrow { display: flex; flex-wrap: wrap; gap: 16px 14px; align-items: center; margin-top: 14px; }
+  .mxbox { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+  .cap { font-size: 12px; color: var(--muted); }
+  .op { font-size: 22px; color: var(--muted); font-weight: 500; padding: 0 2px; }
+  .mxw { border-left: 2px solid var(--fg); border-right: 2px solid var(--fg); border-radius: 7px; padding: 2px 4px; max-width: 100%; overflow-x: auto; }
+  table.mx { border-collapse: separate; border-spacing: 3px; font-size: 13px; }
+  table.mx th { font-weight: 600; font-size: 11px; color: var(--muted); padding: 0 2px; white-space: nowrap; }
+  table.mx th.col { color: var(--c); }
+  table.mx td {
+    min-width: 38px; height: 34px; padding: 0 4px; text-align: center; border-radius: 6px;
+    background: color-mix(in srgb, var(--c, var(--muted)) 15%, var(--panel));
+    border-bottom: 3px solid transparent; white-space: nowrap;
+  }
+  .c0 { --c: var(--b0); } .c1 { --c: var(--b1); } .c2 { --c: var(--b2); } .c3 { --c: var(--b3); }
+  .p0 { border-bottom-color: var(--b0) !important; } .p1 { border-bottom-color: var(--b1) !important; }
+  .p2 { border-bottom-color: var(--b2) !important; } .p3 { border-bottom-color: var(--b3) !important; }
+  .wrap { outline: 1.6px dashed var(--wrap); outline-offset: -1.6px; }
+  .disc { opacity: .4; text-decoration: line-through; }
+  .hl { box-shadow: 0 0 0 2px var(--fg); position: relative; z-index: 2; }
+  [data-s] { cursor: default; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+  .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -3px; margin-right: 5px; }
+  .lg-wrap { outline: 1.6px dashed var(--wrap); outline-offset: -1.6px; background: color-mix(in srgb, var(--b0) 15%, var(--panel)); }
+  .lg-und { background: color-mix(in srgb, var(--b0) 15%, var(--panel)); border-bottom: 3px solid var(--b1); }
+  .lg-disc { background: color-mix(in srgb, var(--b0) 15%, var(--panel)); opacity: .4; }
+
+  /* 信号视图 */
+  .stripscroll { overflow-x: auto; padding-bottom: 4px; }
+  .strip { min-width: 700px; display: flex; flex-direction: column; gap: 4px; }
+  .srow { display: grid; grid-template-columns: 78px repeat(20, minmax(0, 1fr)); gap: 3px; align-items: center; }
+  .lab { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .sc {
+    height: 30px; display: flex; align-items: center; justify-content: center; font-size: 13px; border-radius: 6px;
+    background: color-mix(in srgb, var(--fg) 8%, var(--panel)); grid-row: 1;
+  }
+  .sc.ghost { background: transparent; outline: 1.6px dashed var(--wrap); outline-offset: -1.6px; color: var(--wrap); }
+  .sp { font-size: 11px; text-align: center; color: var(--muted); }
+  .seg {
+    height: 28px; grid-row: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; border-radius: 5px;
+    background: color-mix(in srgb, var(--c) 22%, var(--panel)); border-bottom: 3px solid transparent;
+  }
+  .seg.keep { background: color-mix(in srgb, var(--c) 45%, var(--panel)); font-weight: 600; }
+  .seg.disc { opacity: .4; text-decoration: none; }
+  .cnt { text-align: center; font-size: 12px; color: var(--fg); }
+  .note { font-size: 13px; color: var(--muted); margin-top: 8px; max-width: 80ch; }
+  .ok { color: var(--b2); font-weight: 600; }
+  @media (prefers-reduced-motion: no-preference) { .chip, .nav { transition: background .15s; } }
+</style>
+
+<div class="wrapper">
+  <header>
+    <h1>Overlap-Save 分块的矩阵运算</h1>
+    <p class="sub">用 N=8、P=4、B=4、L=16 的小例子，逐步展开 <span class="mono">eq_fdc_fft.m</span> 里的 start、idx、R、Yb。字母 a–p 代表信号的 16 个样本。</p>
+  </header>
+
+  <div class="stepbar">
+    <button class="nav" id="prev">← 上一步</button>
+    <div class="chips" id="chips" role="tablist" aria-label="步骤"></div>
+    <button class="nav" id="next">下一步 →</button>
+  </div>
+
+  <section class="panel" id="main" aria-live="polite"></section>
+
+  <section class="panel">
+    <h2 style="font-size:15px;margin-bottom:10px">信号视图：窗口、重叠、保留区</h2>
+    <div class="stripscroll"><div class="strip" id="strip"></div></div>
+    <div class="legend" id="legend"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var N = 8, P = 4, B = 4, L = 16, nB = 4;
+  var letters = "abcdefghijklmnop".split("");
+  var mod = function (x, m) { return ((x % m) + m) % m; };
+  var fmtn = function (v) { return v < 0 ? "−" + (-v) : String(v); };
+
+  var start = []; for (var j = 0; j < nB; j++) start.push(j * B - P / 2);
+  var off = []; for (var i = 0; i < N; i++) off.push(i);
+  var raw = off.map(function (i) { return start.map(function (s) { return s + i; }); });
+  var wr = raw.map(function (r) { return r.map(function (v) { return mod(v, L); }); });
+  var idx1 = wr.map(function (r) { return r.map(function (v) { return v + 1; }); });
+  var outside = function (v) { return v < 0 || v >= L; };
+  var partner = function (i, j) {            // 这一行和哪个块共享样本
+    if (i < P) return mod(j - 1, nB);
+    if (i >= N - P) return mod(j + 1, nB);
+    return -1;
+  };
+  var isDisc = function (i) { return i < P / 2 || i >= P / 2 + B; };
+
+  function mx(data, o) {
+    var h = '<div class="mxw"><table class="mx"><thead><tr>';
+    if (o.rowHead) h += "<th></th>";
+    for (var j = 0; j < data[0].length; j++) {
+      var lab = o.colLabels ? o.colLabels[j] : "块" + j;
+      h += '<th class="col c' + j + '">' + lab + "</th>";
+    }
+    h += "</tr></thead><tbody>";
+    for (var i = 0; i < data.length; i++) {
+      h += "<tr>";
+      if (o.rowHead) h += "<th>" + (o.rowLabels ? o.rowLabels[i] : i) + "</th>";
+      for (var k = 0; k < data[i].length; k++) {
+        var c = o.cell(i, k, data[i][k]);
+        h += '<td class="c' + (o.colorCol === false ? 0 : k) + " " + (c.cls || "") + '"' +
+             (c.s !== undefined ? ' data-s="' + c.s + '"' : "") + ">" + c.t + "</td>";
+      }
+      h += "</tr>";
+    }
+    return h + "</tbody></table></div>";
+  }
+  function box(cap, html) { return '<div class="mxbox">' + html + '<div class="cap">' + cap + "</div></div>"; }
+  var op = function (t) { return '<div class="op">' + t + "</div>"; };
+  var undl = function (i, j, on) { var p = partner(i, j); return on && p >= 0 ? "p" + p : ""; };
+
+  var steps = [
+    { chip: "0 参数", title: "0 · 输入与参数",
+      code: "P = round(N*cfg.blk.overlap);  B = N - P;  nBlk = L/B;",
+      text: ["信号 r 长 L=16。块长 N=8，重叠 P=N×50%=4，每块新增 B=N−P=4 个样本，所以需要 nBlk=L/B=4 块。",
+             "真实仿真里 N=64…2048、L=2¹⁷，道理完全一样，只是矩阵更大。下面的信号视图里，灰色格是 r 的 16 个样本（位置 0–15）。"],
+      view: function () {
+        return '<div class="mxrow"><div class="mxbox"><table class="mx"><tbody><tr><th>N</th><td>8</td><th>P</th><td>4</td><th>B</th><td>4</td><th>L</th><td>16</td><th>nBlk</th><td>4</td></tr></tbody></table><div class="cap">块长 / 重叠 / 每块新增 / 信号长度 / 块数</div></div></div>';
+      } },
+    { chip: "1 start", title: "1 · 每块从哪里开始：start",
+      code: "start = (0:nBlk-1) * B - P/2;",
+      text: ["块 j 的有效区是信号里 [jB, jB+B−1] 这 B 个样本，但块的两端各 P/2 个样本会被污染，所以窗口要比有效区向左多带 P/2 个缓冲。因此 start = jB − P/2。",
+             "块 0 的起点是 −2，已经伸到信号前面去了，后面用环绕处理。下面的信号视图里出现 4 个窗口，每个长 N=8，相邻窗口错开 B=4，也就是重叠 P=4。"],
+      view: function () {
+        var rows = start.map(function (s, j) { return "<tr><th class='col c" + j + "'>块" + j + "</th><td class='c" + j + "'>" + j + "×4 − 2</td><td class='c" + j + "'>= " + fmtn(s) + "</td></tr>"; }).join("");
+        return '<div class="mxrow">' + box("每块的起点（0 基，行向量 1×4）",
+          mx([start], { rowHead: false, cell: function (i, j, v) { return { t: fmtn(v), cls: v < 0 ? "wrap" : "" }; } })) +
+          '<div class="mxbox"><table class="mx"><tbody>' + rows + '</tbody></table><div class="cap">j×B − P/2</div></div></div>';
+      } },
+    { chip: "2 偏移", title: "2 · 块内偏移列",
+      code: "(0:N-1).'",
+      text: ["末尾的 .' 是转置。0:N-1 是行向量，转置成 8×1 的列向量，表示一个块里第 0、1、…、7 个位置。"],
+      view: function () {
+        return '<div class="mxrow">' + box("块内偏移（8×1 列向量）",
+          mx(off.map(function (v) { return [v]; }), { colLabels: ["偏移"], rowHead: false, colorCol: false, cell: function (i, j, v) { return { t: v }; } })) + "</div>";
+      } },
+    { chip: "3 隐式扩展", title: "3 · 隐式扩展相加",
+      code: "start + (0:N-1).'     % 1×4 行  +  8×1 列  →  8×4 矩阵",
+      text: ["行向量和列向量相加时，MATLAB 自动把行向量沿纵向复制 8 份，把列向量沿横向复制 4 份，再逐元素相加，得到 8×4 矩阵。",
+             "矩阵第 (i, j) 个元素 = start(j) + i。每一列就是一个块要取的下标，相邻两列有 4 个下标相同（条纹下线指出和哪个块共享）。条纹下线的颜色是共享块的颜色。"],
+      view: function () {
+        var cellRaw = function (i, j, v) { return { t: fmtn(v), cls: (outside(v) ? "wrap " : "") + undl(i, j, true), s: mod(v, L) }; };
+        return '<div class="mxrow">' +
+          box("start 沿纵向复制", mx(off.map(function () { return start; }), { cell: function (i, j, v) { return { t: fmtn(v), cls: v < 0 ? "wrap" : "" }; } })) + op("+") +
+          box("偏移沿横向复制", mx(off.map(function (i) { return start.map(function () { return i; }); }), { cell: function (i, j, v) { return { t: v }; } })) + op("=") +
+          box("raw：各块的 0 基下标（虚线 = 超出 0…15）", mx(raw, { cell: cellRaw })) + "</div>";
+      } },
+    { chip: "4 mod 环绕", title: "4 · mod 环绕",
+      code: "mod(start + (0:N-1).', L)",
+      text: ["信号只有下标 0…15，超出的要绕回来：−2→14，−1→15，16→0，17→1。虚线格就是被改动的 4 个元素。",
+             "这样取样与信道的圆卷积一致：首尾相接。注意绕回来之后，样本 14、15 同时出现在块 3 和块 0，样本 0、1 同时出现在块 0 和块 3。"],
+      view: function () {
+        return '<div class="mxrow">' +
+          box("raw", mx(raw, { cell: function (i, j, v) { return { t: fmtn(v), cls: outside(v) ? "wrap" : "" }; } })) + op("mod 16 →") +
+          box("环绕后的 0 基下标（虚线 = 刚被改动）", mx(wr, { cell: function (i, j, v) { return { t: v, cls: (outside(raw[i][j]) ? "wrap " : "") + undl(i, j, true), s: v }; } })) + "</div>";
+      } },
+    { chip: "5 +1", title: "5 · +1 换成 MATLAB 的 1 基下标",
+      code: "idx = mod(start + (0:N-1).', L) + 1;",
+      text: ["MATLAB 数组下标从 1 开始，所以整体 +1。这就是代码里的 idx（N×nBlk）。每一列是一个块的取数清单。",
+             "鼠标悬停在任何一格上，所有取同一个样本的格子（以及下方信号视图里的对应位置）会高亮。"],
+      view: function () {
+        return '<div class="mxrow">' +
+          box("0 基", mx(wr, { cell: function (i, j, v) { return { t: v, cls: undl(i, j, true), s: v }; } })) + op("+ 1 =") +
+          box("idx（1 基）", mx(idx1, { cell: function (i, j, v) { return { t: v, cls: (outside(raw[i][j]) ? "wrap " : "") + undl(i, j, true), s: v - 1 }; } })) + "</div>";
+      } },
+    { chip: "6 R=r(idx)", title: "6 · 按清单取数：R = r(idx)",
+      code: "R = r(idx);          % N×nBlk，每列一个块",
+      text: ["用矩阵 idx 当下标，一次取出所有块的数据。idx 的 (i, j) 位置是几，R 的 (i, j) 位置就是 r 的第几个元素。",
+             "每一列是一个长 8 的块。块 0 的前两行是 o、p，来自信号末尾（环绕）；块 3 的最后两行是 a、b，来自开头。相邻两列有 4 个相同的字母，就是重叠 P=4。"],
+      view: function () {
+        return '<div class="mxrow">' +
+          box("idx", mx(idx1, { cell: function (i, j, v) { return { t: v, cls: undl(i, j, true), s: v - 1 }; } })) + op("r(idx) →") +
+          box("R：每列是一个块", mx(idx1, { cell: function (i, j, v) { return { t: letters[v - 1], cls: (outside(raw[i][j]) ? "wrap " : "") + undl(i, j, true), s: v - 1 }; } })) + "</div>";
+      } },
+    { chip: "7 FFT·H·IFFT", title: "7 · 逐列 FFT → 乘 H → IFFT",
+      code: "Yb = ifft(fft(R, [], 1) .* H, [], 1);",
+      text: ["fft(R,[],1) 沿第 1 维（每一列）各做一次 8 点 FFT；.* H 把同一个 8×1 的 H 乘到每一列（隐式扩展）；ifft 再变回来。补偿后每个位置仍对应原来的样本，用 a′…p′ 表示。",
+             "频域相乘是圆卷积，每块两端各 P/2=2 行因为缺少对面的邻居，会被污染（划掉）；中间 B=4 行是正确的。"],
+      view: function () {
+        var hcol = off.map(function (i) { return ["H" + i]; });
+        return '<div class="mxrow">' +
+          box("R", mx(idx1, { cell: function (i, j, v) { return { t: letters[v - 1], s: v - 1 }; } })) + op("FFT → ×") +
+          box("H（所有列共用）", mx(hcol, { colLabels: ["H"], rowHead: false, colorCol: false, cell: function (i, j, v) { return { t: v }; } })) + op("→ IFFT =") +
+          box("Yb（划掉 = 两端各 P/2 行，丢弃）", mx(idx1, { cell: function (i, j, v) { return { t: letters[v - 1] + "′", cls: isDisc(i) ? "disc" : "", s: v - 1 }; } })) + "</div>";
+      } },
+    { chip: "8 保留中间", title: "8 · 每块只保留中间 B 行",
+      code: "Yb(P/2+1 : P/2+B, :)       % 第 3 到第 6 行（1 基）",
+      text: ["每列取第 P/2+1 到 P/2+B 行，共 B=4 行，得到 4×4 矩阵。第 j 块保留的正好是信号里 [jB, jB+B−1] 这 4 个样本：块 0 是 a′b′c′d′，块 1 是 e′f′g′h′，依此类推。",
+             "所以重叠 50% 并不浪费：每个样本在 2 个块里都出现，但只在其中 1 个块的中间被保留（见下方「保留次数」）。"],
+      view: function () {
+        var kept = []; for (var i = P / 2; i < P / 2 + B; i++) kept.push(idx1[i]);
+        return '<div class="mxrow">' +
+          box("Yb 的第 3–6 行", mx(kept, { rowLabels: [2, 3, 4, 5], cell: function (i, j, v) { return { t: letters[v - 1] + "′", s: v - 1 }; } })) + "</div>";
+      } },
+    { chip: "9 拼回", title: "9 · reshape 拼回一条序列",
+      code: "y = reshape(Yb(P/2+1 : P/2+B, :), [], 1);",
+      text: ["reshape 按列优先读取：先第 0 列的 4 个，再第 1 列的 4 个……，自然按顺序首尾相接。结果 y 是 16 个样本，每个位置恰好出现一次，没有缝隙也没有重复。",
+             "这就是补偿后的信号，与输入 r 等长、位置一一对应。"],
+      view: function () {
+        var cells = "", src = "";
+        for (var j = 0; j < nB; j++) for (var k = 0; k < B; k++) {
+          var s = wr[P / 2 + k][j];
+          cells += '<td class="c' + j + '" data-s="' + s + '">' + letters[s] + "′</td>";
+          src += "<th>块" + j + " 行" + (P / 2 + k) + "</th>";
+        }
+        return '<div class="mxrow"><div class="mxbox"><div class="mxw"><table class="mx"><thead><tr>' + src + "</tr></thead><tbody><tr>" + cells + '</tr></tbody></table></div><div class="cap">y（16×1，这里横着画）；表头 = 来自哪个块的哪一行（0 基）</div></div></div>' +
+          '<p class="note"><span class="ok">检查：</span>y 的顺序是 a′ b′ c′ … p′，与 r 的顺序完全一致。</p>';
+      } }
+  ];
+
+  /* 信号视图 */
+  function drawStrip(step) {
+    var pos = []; for (var p = -2; p <= L + 1; p++) pos.push(p);
+    var cover = {}, kept = {};
+    for (var s = 0; s < L; s++) { cover[s] = 0; kept[s] = 0; }
+    for (var j = 0; j < nB; j++) for (var i = 0; i < N; i++) {
+      cover[wr[i][j]]++;
+      if (!isDisc(i)) kept[wr[i][j]]++;
+    }
+    var h = '<div class="srow"><div class="lab">信号 r</div>' + pos.map(function (p, k) {
+      var s = mod(p, L), ghost = outside(p);
+      return '<div class="sc' + (ghost ? " ghost" : "") + '" data-s="' + s + '" style="grid-column:' + (k + 2) + '">' + letters[s] + "</div>";
+    }).join("") + "</div>";
+    h += '<div class="srow"><div class="lab">位置（0 基）</div>' + pos.map(function (p) { return '<div class="sp">' + fmtn(p) + "</div>"; }).join("") + "</div>";
+    if (step >= 1) {
+      for (var j2 = 0; j2 < nB; j2++) {
+        h += '<div class="srow"><div class="lab" style="color:var(--b' + j2 + ')">块 ' + j2 + "</div>";
+        for (var k2 = 0; k2 < N; k2++) {
+          var p2 = start[j2] + k2, s2 = mod(p2, L), pt = partner(k2, j2);
+          var cls = "seg c" + j2 + (step >= 7 && isDisc(k2) ? " disc" : "") + (step >= 7 && !isDisc(k2) ? " keep" : "") + (pt >= 0 ? " p" + pt : "");
+          h += '<div class="' + cls + '" data-s="' + s2 + '" style="grid-column:' + (p2 + 4) + '">' + letters[s2] + "</div>";
+        }
+        h += "</div>";
+      }
+      h += '<div class="srow"><div class="lab">覆盖次数</div>' + pos.map(function (p, k) { return '<div class="cnt" data-s="' + mod(p, L) + '" style="grid-column:' + (k + 2) + '">' + cover[mod(p, L)] + "</div>"; }).join("") + "</div>";
+    }
+    if (step >= 7) {
+      h += '<div class="srow"><div class="lab">保留次数</div>' + pos.map(function (p, k) { return '<div class="cnt" data-s="' + mod(p, L) + '" style="grid-column:' + (k + 2) + '"><span class="ok">' + kept[mod(p, L)] + "</span></div>"; }).join("") + "</div>";
+    }
+    document.getElementById("strip").innerHTML = h;
+    var lg = '<span><i class="lg-und"></i>下线颜色 = 这部分样本与哪个块共享（重叠）</span><span><i class="lg-wrap"></i>虚线 = 超出信号、从另一端环绕</span>';
+    if (step >= 7) lg += '<span><i class="lg-disc"></i>变淡 = 块两端 P/2 个样本，被丢弃</span>';
+    document.getElementById("legend").innerHTML = lg;
+  }
+
+  var cur = 0;
+  function render() {
+    var st = steps[cur];
+    var h = "<h2>" + st.title + '</h2><pre class="code">' + st.code.replace(/</g, "&lt;") + "</pre><div class=\"txt\">" +
+      st.text.map(function (t) { return "<p>" + t + "</p>"; }).join("") + "</div>" + st.view();
+    document.getElementById("main").innerHTML = h;
+    drawStrip(cur);
+    var chips = document.getElementById("chips");
+    chips.innerHTML = steps.map(function (s, i) {
+      return '<button class="chip" role="tab" data-i="' + i + '" aria-current="' + (i === cur) + '">' + s.chip + "</button>";
+    }).join("");
+    document.getElementById("prev").disabled = cur === 0;
+    document.getElementById("next").disabled = cur === steps.length - 1;
+  }
+  document.getElementById("chips").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-i]"); if (b) { cur = +b.dataset.i; render(); }
+  });
+  document.getElementById("prev").onclick = function () { if (cur > 0) { cur--; render(); } };
+  document.getElementById("next").onclick = function () { if (cur < steps.length - 1) { cur++; render(); } };
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft" && cur > 0) { cur--; render(); }
+    if (e.key === "ArrowRight" && cur < steps.length - 1) { cur++; render(); }
+  });
+
+  /* 悬停联动：同一个样本在所有矩阵和信号视图里一起高亮 */
+  function setHl(s, on) {
+    document.querySelectorAll('[data-s="' + s + '"]').forEach(function (el) { el.classList.toggle("hl", on); });
+  }
+  document.addEventListener("mouseover", function (e) { var t = e.target.closest("[data-s]"); if (t) setHl(t.dataset.s, true); });
+  document.addEventListener("mouseout", function (e) { var t = e.target.closest("[data-s]"); if (t) setHl(t.dataset.s, false); });
+
+  render();
+})();
+</script>
