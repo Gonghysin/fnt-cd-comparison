@@ -51,31 +51,8 @@ mx = 2^(o.xbit-1) - 1;
 xr = round(max(min(real(R) * sx, mx), -mx));            % 限幅 + 量化
 xi = round(max(min(imag(R) * sx, mx), -mx));
 
-%% FNT 域处理
-if ~use2d
-    par = fnt_params(b, N);
-    Xr = fnt_1d(mod(xr, q), par, 1);   Xi = fnt_1d(mod(xi, q), par, 1);
-    Hr = fnt_1d(mod(real(hN), q), par, 1);  Hi = fnt_1d(mod(imag(hN), q), par, 1);
-    [Yr, Yi] = qrns_pointmul(Xr, Xi, Hr, Hi, b);
-    yr = fnt_lift(fnt_1d(Yr, par, -1), q);
-    yi = fnt_lift(fnt_1d(Yi, par, -1), q);
-else
-    Lr = o.L;  M = N / Lr;
-    assert(2*Lr <= 2^b && M <= 2^b, '2D 的行列长度需不超过 2^b');
-    parR = fnt_params(b, M);  parC = fnt_params(b, 2*Lr);
-    pack = @(v) cat(1, reshape(v, Lr, M, []), zeros(Lr, M, size(v, 2)));   % -> 2L x M x nBlk
-    Xr = fnt2d_batch(pack(mod(xr, q)), parR, parC, 1);
-    Xi = fnt2d_batch(pack(mod(xi, q)), parR, parC, 1);
-    Hr = fnt2d_batch(pack(mod(real(hN), q)), parR, parC, 1);
-    Hi = fnt2d_batch(pack(mod(imag(hN), q)), parR, parC, 1);
-    [Yr, Yi] = qrns_pointmul(Xr, Xi, Hr, Hi, b);
-    zr = fnt2d_batch(Yr, parR, parC, -1);
-    zi = fnt2d_batch(Yi, parR, parC, -1);
-    yr = fnt_lift(fold(zr, Lr, M, q), q);
-    yi = fnt_lift(fold(zi, Lr, M, q), q);
-end
-
-Yint = complex(yr, yi);                                 % N x nBlk，有符号整数
+%% FNT 域处理（1D 或 2D，见 fnt_cconv）
+Yint = fnt_cconv(xr, xi, hN, b, o.L * use2d);       % N x nBlk，有符号整数
 Yb = Yint / (sx * sh);
 y = reshape(Yb(P/2+1 : P/2+B, :), [], 1);
 
@@ -96,27 +73,4 @@ o.b = 16;  o.xbit = 4;  o.hbit = 4;  o.xmax = 3;  o.L = 0;
 f = fieldnames(opts);
 for k = 1:numel(f), o.(f{k}) = opts.(f{k}); end
 if o.L == 0 && N > 2^o.b, o.L = 16; end
-end
-
-function Y = fnt2d_batch(X, parR, parC, dir) % FNT-2D用的
-%FNT2D_BATCH  对 2L x M x nBlk 的每一页做 2D-FNT / IFNT（与 fnt_2d 同一算法，批量版）。
-[L2, M, nb] = size(X);
-if dir > 0
-    A = fnt_1d(reshape(permute(X, [2 1 3]), M, L2*nb), parR, 1);     % 先行（M 点）
-    A = reshape(permute(reshape(A, M, L2, nb), [2 1 3]), L2, M*nb);
-    Y = reshape(fnt_1d(A, parC, 1), L2, M, nb);                       % 后列（2L 点）
-else
-    A = fnt_1d(reshape(X, L2, M*nb), parC, -1);
-    A = reshape(permute(reshape(A, L2, M, nb), [2 1 3]), M, L2*nb);
-    A = fnt_1d(A, parR, -1);
-    Y = permute(reshape(A, M, L2, nb), [2 1 3]);
-end
-end
-
-function y = fold(Z, Lr, M, q)
-%FOLD  2D 卷积结果折回一维：y(l,m) = Z(l,m) + Z(l+L, m-1)（见 fnt_unpack2d）。
-low = Z(1:Lr, :, :);
-up  = Z(Lr+1:2*Lr, :, :);
-y = mod(low + circshift(up, 1, 2), q);
-y = reshape(y, Lr*M, []);
 end
